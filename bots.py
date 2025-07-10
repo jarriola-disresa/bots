@@ -12,8 +12,6 @@ import json
 import shutil
 from pathlib import Path
 import zipfile
-import hashlib
-import logging
 import hmac
 import pymongo
 
@@ -97,179 +95,29 @@ def load_data(collection_name):
 # Funciones globales con cache para optimizar carga
 @st.cache_data
 def load_bot_dictionary(bot_name):
-    """Carga diccionario de un bot específico con cache"""
-    base_path = "/home/jarriola/BOTS"
-    
+    """Carga diccionario de un bot específico desde MongoDB"""
     try:
-        if bot_name == "ADOLFO":
-            return pd.read_csv(f"{base_path}/ADOLFO/AD.csv", sep=';')
-        elif bot_name == "BIRKEN":
-            return pd.read_csv(f"{base_path}/BIRKEN/birken.csv", sep=';')
-        elif bot_name == "PB":
-            return pd.read_csv(f"{base_path}/PB/dictionarypb.csv", sep=';')
-        elif bot_name == "SKECHERS":
-            return pd.read_csv(f"{base_path}/SKECHERS/dictionarysk.csv", sep=';')
-        else:
-            return pd.DataFrame()
+        return load_data(bot_name)
     except Exception as e:
         st.error(f"❌ Error cargando diccionario {bot_name}: {str(e)}")
         return pd.DataFrame()
 
 @st.cache_data
 def process_new_era_levels():
-    """Procesa y combina archivos L1-L7 de NEW ERA con cache"""
-    base_path = "/home/jarriola/BOTS/NEW ERA"
-    
+    """Procesa datos de NEW ERA desde MongoDB"""
     try:
-        # Cargar archivos L1-L7
-        df_l1 = pd.read_csv(f"{base_path}/NE_L1.csv", sep=';')
-        df_l2 = pd.read_csv(f"{base_path}/NE_L2.csv", sep=';')
-        df_l3 = pd.read_csv(f"{base_path}/NE_L3.csv", sep=';')
-        df_l4 = pd.read_csv(f"{base_path}/NE_L4.csv", sep=';')
-        df_l5 = pd.read_csv(f"{base_path}/NE_L5.csv", sep=';')
-        df_l6 = pd.read_csv(f"{base_path}/NE_L6.csv", sep=';')
-        
-        # Intentar cargar L7, si no existe usar L6
-        try:
-            df_l7 = pd.read_csv(f"{base_path}/NE_L7.csv", sep=';')
-        except:
-            df_l7 = pd.read_csv(f"{base_path}/NE_L6.csv", sep=';')
-        
-        # Columnas de agrupación
-        columnas_agrupacion = ['U_Estilo', 'U_Silueta', 'U_Team', 'U_Descrip_Color', 'U_Segmento',
-                              'U_Liga', 'U_Coleccion_NE', 'U_Genero', 'U_Descripcion', 'U_Temporalidad']
-        
-        # Agrupar cada nivel eliminando duplicados
-        dataframes = [df_l1, df_l2, df_l3, df_l4, df_l5, df_l6, df_l7]
-        df_grouped_list = []
-        
-        for df in dataframes:
-            # Filtrar solo las columnas que existen en el DataFrame
-            columnas_existentes = [col for col in columnas_agrupacion if col in df.columns]
-            
-            if columnas_existentes:
-                df_grouped = df.groupby(columnas_existentes).size().reset_index(name='count')
-                df_grouped = df_grouped.drop(columns=['count'])
-                df_grouped['U_Estilo'] = df_grouped['U_Estilo'].astype(str)
-                df_grouped_list.append(df_grouped)
-            else:
-                # Si no hay columnas válidas, crear DataFrame vacío
-                df_grouped_list.append(pd.DataFrame())
-        
-        # Combinar en cascada (L1 → L2 → L3 → L4 → L5 → L6 → L7)
-        df_final = df_grouped_list[0].copy() if not df_grouped_list[0].empty else pd.DataFrame()
-        
-        # Columnas comunes para completar
-        columnas_comunes = ['U_Silueta', 'U_Team', 'U_Descrip_Color', 'U_Segmento',
-                           'U_Liga', 'U_Coleccion_NE', 'U_Genero', 'U_Descripcion', 'U_Temporalidad']
-        
-        # Proceso de combinación en cascada
-        for df_temp in df_grouped_list[1:]:
-            if df_temp.empty:
-                continue
-                
-            # Merge con el DataFrame actual
-            df_merged = df_final.merge(
-                df_temp,
-                on='U_Estilo',
-                how='left',
-                suffixes=('', '_temp')
-            )
-            
-            # Completar valores faltantes en las columnas comunes
-            for col in columnas_comunes:
-                if col in df_final.columns and f'{col}_temp' in df_merged.columns:
-                    df_merged[col] = df_merged[col].fillna(df_merged[f'{col}_temp'])
-                    df_merged.drop(f'{col}_temp', axis=1, inplace=True)
-            
-            # Añadir registros únicos del DataFrame temporal que no están en df_final
-            df_final = pd.concat([
-                df_merged,
-                df_temp[~df_temp['U_Estilo'].isin(df_final['U_Estilo'])]
-            ], ignore_index=True)
-        
-        # Eliminar posibles duplicados
-        df_final = df_final.drop_duplicates(subset='U_Estilo', keep='first')
-        
-        return df_final
-        
+        return load_data("NEW_ERA")
     except Exception as e:
-        st.error(f"❌ Error procesando archivos NEW ERA L1-L7: {str(e)}")
+        st.error(f"❌ Error procesando NEW ERA: {str(e)}")
         return pd.DataFrame()
 
 @st.cache_data
 def process_ch_levels():
-    """Procesa y combina archivos L1-L6 de CH con cache"""
-    base_path = "/home/jarriola/BOTS/CH"
-    
+    """Procesa datos de CH desde MongoDB"""
     try:
-        # Cargar archivos L1-L6
-        df_l1 = pd.read_csv(f"{base_path}/CH_L1.csv", sep=';')
-        df_l2 = pd.read_csv(f"{base_path}/CH_L2.csv", sep=';')
-        df_l3 = pd.read_csv(f"{base_path}/CH_L3.csv", sep=';')
-        df_l4 = pd.read_csv(f"{base_path}/CH_L4.csv", sep=';')
-        df_l5 = pd.read_csv(f"{base_path}/CH_L5.csv", sep=';')
-        df_l6 = pd.read_csv(f"{base_path}/CH_L6.csv", sep=';')
-        
-        # Columnas de agrupación para CH
-        columnas_agrupacion = ['U_Estilo', 'U_Descripcion', 'U_Segmentacion_SK', 'U_Zone', 'U_Descrip_Color']
-        
-        # Agrupar cada nivel eliminando duplicados
-        dataframes = [df_l1, df_l2, df_l3, df_l4, df_l5, df_l6]
-        df_grouped_list = []
-        
-        for df in dataframes:
-            # Filtrar solo las columnas que existen en el DataFrame
-            columnas_existentes = [col for col in columnas_agrupacion if col in df.columns]
-            
-            if columnas_existentes:
-                df_grouped = df.groupby(columnas_existentes).size().reset_index(name='count')
-                df_grouped = df_grouped.drop(columns=['count'])
-                df_grouped['U_Estilo'] = df_grouped['U_Estilo'].astype(str)
-                df_grouped_list.append(df_grouped)
-            else:
-                # Si no hay columnas válidas, crear DataFrame vacío
-                df_grouped_list.append(pd.DataFrame())
-        
-        # Combinar en cascada según prioridad del notebook (L2 → L3 → L4 → L5 → L6 → L1)
-        dataframes_a_combinar = [df_grouped_list[2], df_grouped_list[3], df_grouped_list[4], df_grouped_list[5], df_grouped_list[0]]  # L3,L4,L5,L6,L1
-        df_final = df_grouped_list[1].copy() if not df_grouped_list[1].empty else pd.DataFrame()  # Empezar con L2
-        
-        # Columnas comunes para completar
-        columnas_comunes = ['U_Descripcion', 'U_Segmentacion_SK', 'U_Zone', 'U_Descrip_Color']
-        
-        # Proceso de combinación en cascada
-        for df_temp in dataframes_a_combinar:
-            if df_temp.empty:
-                continue
-                
-            # Merge con el DataFrame actual
-            df_merged = df_final.merge(
-                df_temp,
-                on='U_Estilo',
-                how='left',
-                suffixes=('', '_temp')
-            )
-            
-            # Completar valores faltantes en las columnas comunes
-            for col in columnas_comunes:
-                if col in df_final.columns and f'{col}_temp' in df_merged.columns:
-                    df_merged[col] = df_merged[col].fillna(df_merged[f'{col}_temp'])
-                    df_merged.drop(f'{col}_temp', axis=1, inplace=True)
-            
-            # Añadir registros únicos del DataFrame temporal que no están en df_final
-            df_final = pd.concat([
-                df_merged,
-                df_temp[~df_temp['U_Estilo'].isin(df_final['U_Estilo'])]
-            ], ignore_index=True)
-        
-        # Eliminar posibles duplicados
-        df_final = df_final.drop_duplicates(subset='U_Estilo', keep='first')
-        
-        return df_final
-        
+        return load_data("CH")
     except Exception as e:
-        st.error(f"❌ Error procesando archivos CH L1-L6: {str(e)}")
+        st.error(f"❌ Error procesando CH: {str(e)}")
         return pd.DataFrame()
 
 class DataCleaner:
@@ -531,7 +379,7 @@ class DataCleaner:
     def load_adolfo_dict(_self):
         """Carga diccionario ADOLFO con cache"""
         try:
-            return pd.read_csv("/home/jarriola/BOTS/ADOLFO/AD.csv", sep=';')
+            return load_data("ADOLFO")
         except Exception as e:
             st.error(f"❌ Error cargando diccionario ADOLFO: {str(e)}")
             return pd.DataFrame()
@@ -540,7 +388,7 @@ class DataCleaner:
     def load_birken_dict(_self):
         """Carga diccionario BIRKEN con cache"""
         try:
-            return pd.read_csv("/home/jarriola/BOTS/BIRKEN/birken.csv", sep=';')
+            return load_data("BIRKEN")
         except Exception as e:
             st.error(f"❌ Error cargando diccionario BIRKEN: {str(e)}")
             return pd.DataFrame()
@@ -549,7 +397,7 @@ class DataCleaner:
     def load_pb_dict(_self):
         """Carga diccionario PB con cache"""
         try:
-            return pd.read_csv("/home/jarriola/BOTS/PB/dictionarypb.csv", sep=';')
+            return load_data("PB")
         except Exception as e:
             st.error(f"❌ Error cargando diccionario PB: {str(e)}")
             return pd.DataFrame()
@@ -558,63 +406,27 @@ class DataCleaner:
     def load_skechers_dict(_self):
         """Carga diccionario SKECHERS con cache"""
         try:
-            return pd.read_csv("/home/jarriola/BOTS/SKECHERS/dictionarysk.csv", sep=';')
+            return load_data("SKECHERS")
         except Exception as e:
             st.error(f"❌ Error cargando diccionario SKECHERS: {str(e)}")
             return pd.DataFrame()
     
     @st.cache_data
     def load_new_era_dict(_self):
-        """Procesa y combina archivos L1-L7 de NEW ERA con cache"""
-        base_path = "/home/jarriola/BOTS/NEW ERA"
-        
+        """Carga diccionario NEW ERA con cache"""
         try:
-            # Cargar archivos L1-L7
-            df_l1 = pd.read_csv(f"{base_path}/NE_L1.csv", sep=';')
-            df_l2 = pd.read_csv(f"{base_path}/NE_L2.csv", sep=';')
-            df_l3 = pd.read_csv(f"{base_path}/NE_L3.csv", sep=';')
-            df_l4 = pd.read_csv(f"{base_path}/NE_L4.csv", sep=';')
-            df_l5 = pd.read_csv(f"{base_path}/NE_L5.csv", sep=';')
-            df_l6 = pd.read_csv(f"{base_path}/NE_L6.csv", sep=';')
-            
-            # Intentar cargar L7, si no existe usar L6
-            try:
-                df_l7 = pd.read_csv(f"{base_path}/NE_L7.csv", sep=';')
-            except:
-                df_l7 = pd.read_csv(f"{base_path}/NE_L6.csv", sep=';')
-            
-            # Procesar y combinar (lógica simplificada para velocidad)
-            columnas_agrupacion = ['U_Estilo', 'U_Silueta', 'U_Team', 'U_Descrip_Color', 'U_Segmento',
-                                  'U_Liga', 'U_Coleccion_NE', 'U_Genero', 'U_Descripcion', 'U_Temporalidad']
-            
-            # Solo tomar L1 para velocidad - se puede expandir si se necesita
-            df_final = df_l1.groupby(['U_Estilo']).first().reset_index()
-            df_final['U_Estilo'] = df_final['U_Estilo'].astype(str)
-            
-            return df_final
-            
+            return load_data("NEW_ERA")
         except Exception as e:
-            st.error(f"❌ Error procesando NEW ERA: {str(e)}")
+            st.error(f"❌ Error cargando diccionario NEW ERA: {str(e)}")
             return pd.DataFrame()
     
     @st.cache_data
     def load_ch_dict(_self):
-        """Procesa y combina archivos L1-L6 de CH con cache"""
-        base_path = "/home/jarriola/BOTS/CH"
-        
+        """Carga diccionario CH con cache"""
         try:
-            # Cargar archivos L1-L6
-            df_l1 = pd.read_csv(f"{base_path}/CH_L1.csv", sep=';')
-            df_l2 = pd.read_csv(f"{base_path}/CH_L2.csv", sep=';')
-            
-            # Solo usar L1 y L2 para velocidad - se puede expandir si se necesita
-            df_final = df_l2.groupby(['U_Estilo']).first().reset_index()
-            df_final['U_Estilo'] = df_final['U_Estilo'].astype(str)
-            
-            return df_final
-            
+            return load_data("CH")
         except Exception as e:
-            st.error(f"❌ Error procesando CH: {str(e)}")
+            st.error(f"❌ Error cargando diccionario CH: {str(e)}")
             return pd.DataFrame()
     
     def get_adolfo_dict(self):
@@ -654,21 +466,19 @@ class DataCleaner:
         return self.ch_dict
     
     def load_embedded_dictionaries(self):
-        """Carga los diccionarios embebidos desde los archivos"""
-        base_path = "/home/jarriola/BOTS"
-        
+        """Carga los diccionarios embebidos desde MongoDB"""
         try:
             # ADOLFO
-            self.adolfo_dict = pd.read_csv(f"{base_path}/ADOLFO/AD.csv", sep=';')
+            self.adolfo_dict = load_data("ADOLFO")
             
             # BIRKEN
-            self.birken_dict = pd.read_csv(f"{base_path}/BIRKEN/birken.csv", sep=';')
+            self.birken_dict = load_data("BIRKEN")
             
             # PB
-            self.pb_dict = pd.read_csv(f"{base_path}/PB/dictionarypb.csv", sep=';')
+            self.pb_dict = load_data("PB")
             
             # SKECHERS
-            self.skechers_dict = pd.read_csv(f"{base_path}/SKECHERS/dictionarysk.csv", sep=';')
+            self.skechers_dict = load_data("SKECHERS")
             
             st.success("✅ Diccionarios cargados exitosamente")
             
@@ -682,165 +492,39 @@ class DataCleaner:
             self.ch_dict = pd.DataFrame()
     
     def process_new_era_levels(self):
-        """Procesa y combina archivos L1-L7 de NEW ERA según lógica del notebook"""
-        base_path = "/home/jarriola/BOTS/NEW ERA"
-        
+        """Carga diccionario NEW ERA desde MongoDB"""
         try:
-            # Cargar archivos L1-L7
-            df_l1 = pd.read_csv(f"{base_path}/NE_L1.csv", sep=';')
-            df_l2 = pd.read_csv(f"{base_path}/NE_L2.csv", sep=';')
-            df_l3 = pd.read_csv(f"{base_path}/NE_L3.csv", sep=';')
-            df_l4 = pd.read_csv(f"{base_path}/NE_L4.csv", sep=';')
-            df_l5 = pd.read_csv(f"{base_path}/NE_L5.csv", sep=';')
-            df_l6 = pd.read_csv(f"{base_path}/NE_L6.csv", sep=';')
+            # Cargar datos desde MongoDB
+            df_final = load_data("NEW_ERA")
             
-            # Intentar cargar L7, si no existe usar L6
-            try:
-                df_l7 = pd.read_csv(f"{base_path}/NE_L7.csv", sep=';')
-            except:
-                df_l7 = pd.read_csv(f"{base_path}/NE_L6.csv", sep=';')  # Fallback como en notebook
+            # Convertir U_Estilo a string si existe
+            if 'U_Estilo' in df_final.columns:
+                df_final['U_Estilo'] = df_final['U_Estilo'].astype(str)
             
-            # Columnas de agrupación
-            columnas_agrupacion = ['U_Estilo', 'U_Silueta', 'U_Team', 'U_Descrip_Color', 'U_Segmento',
-                                  'U_Liga', 'U_Coleccion_NE', 'U_Genero', 'U_Descripcion', 'U_Temporalidad']
-            
-            # Agrupar cada nivel eliminando duplicados
-            dataframes = [df_l1, df_l2, df_l3, df_l4, df_l5, df_l6, df_l7]
-            df_grouped_list = []
-            
-            for df in dataframes:
-                # Filtrar solo las columnas que existen en el DataFrame
-                columnas_existentes = [col for col in columnas_agrupacion if col in df.columns]
-                
-                if columnas_existentes:
-                    df_grouped = df.groupby(columnas_existentes).size().reset_index(name='count')
-                    df_grouped = df_grouped.drop(columns=['count'])
-                    df_grouped['U_Estilo'] = df_grouped['U_Estilo'].astype(str)
-                    df_grouped_list.append(df_grouped)
-                else:
-                    # Si no hay columnas válidas, crear DataFrame vacío
-                    df_grouped_list.append(pd.DataFrame())
-            
-            # Combinar en cascada (L1 → L2 → L3 → L4 → L5 → L6 → L7)
-            df_final = df_grouped_list[0].copy() if not df_grouped_list[0].empty else pd.DataFrame()
-            
-            # Columnas comunes para completar
-            columnas_comunes = ['U_Silueta', 'U_Team', 'U_Descrip_Color', 'U_Segmento',
-                               'U_Liga', 'U_Coleccion_NE', 'U_Genero', 'U_Descripcion', 'U_Temporalidad']
-            
-            # Proceso de combinación en cascada
-            for df_temp in df_grouped_list[1:]:
-                if df_temp.empty:
-                    continue
-                
-                # Merge con el DataFrame actual (left join)
-                df_merged = df_final.merge(
-                    df_temp,
-                    on='U_Estilo',
-                    how='left',
-                    suffixes=('', '_temp')
-                )
-                
-                # Completar valores faltantes en las columnas comunes
-                for col in columnas_comunes:
-                    if col in df_final.columns and f'{col}_temp' in df_merged.columns:
-                        df_merged[col] = df_merged[col].fillna(df_merged[f'{col}_temp'])
-                        df_merged.drop(f'{col}_temp', axis=1, inplace=True)
-                
-                # Añadir registros únicos del DataFrame temporal
-                df_final = pd.concat([
-                    df_merged,
-                    df_temp[~df_temp['U_Estilo'].isin(df_final['U_Estilo'])]
-                ], ignore_index=True)
-            
-            # Eliminar duplicados
-            if not df_final.empty:
-                df_final = df_final.drop_duplicates(subset='U_Estilo', keep='first')
-            
-            self.new_era_dict = df_final
-            
-            st.success(f"✅ NEW ERA procesado: {len(df_final)} registros combinados desde L1-L7")
+            return df_final
             
         except Exception as e:
-            st.error(f"❌ Error procesando archivos NEW ERA L1-L7: {str(e)}")
+            st.error(f"❌ Error cargando diccionario NEW ERA: {str(e)}")
             # Crear diccionario vacío como fallback
-            self.new_era_dict = pd.DataFrame()
+            return pd.DataFrame()
     
     def process_ch_levels(self):
-        """Procesa y combina archivos L1-L6 de CH según lógica del notebook"""
-        base_path = "/home/jarriola/BOTS/CH"
-        
+        """Carga diccionario CH desde MongoDB"""
         try:
-            # Cargar archivos L1-L6
-            df_l1 = pd.read_csv(f"{base_path}/CH_L1.csv", sep=';')
-            df_l2 = pd.read_csv(f"{base_path}/CH_L2.csv", sep=';')
-            df_l3 = pd.read_csv(f"{base_path}/CH_L3.csv", sep=';')
-            df_l4 = pd.read_csv(f"{base_path}/CH_L4.csv", sep=';')
-            df_l5 = pd.read_csv(f"{base_path}/CH_L5.csv", sep=';')
-            df_l6 = pd.read_csv(f"{base_path}/CH_L6.csv", sep=';')
+            # Cargar datos desde MongoDB
+            df_final = load_data("CH")
             
-            # Columnas de agrupación para CH
-            columnas_agrupacion = ['U_Estilo', 'U_Descripcion', 'U_Segmentacion_SK', 'U_Zone', 'U_Descrip_Color']
-            
-            # Agrupar cada nivel eliminando duplicados
-            dataframes = [df_l1, df_l2, df_l3, df_l4, df_l5, df_l6]
-            df_grouped_list = []
-            
-            for df in dataframes:
-                # Filtrar solo las columnas que existen en el DataFrame
-                columnas_existentes = [col for col in columnas_agrupacion if col in df.columns]
-                
-                if columnas_existentes:
-                    df_grouped = df.groupby(columnas_existentes).size().reset_index(name='count')
-                    df_grouped = df_grouped.drop(columns=['count'])
-                    df_grouped['U_Estilo'] = df_grouped['U_Estilo'].astype(str)
-                    df_grouped_list.append(df_grouped)
-                else:
-                    # Si no hay columnas válidas, crear DataFrame vacío
-                    df_grouped_list.append(pd.DataFrame())
-            
-            # Combinar en cascada según prioridad del notebook (L2 → L3 → L4 → L5 → L6 → L1)
-            dataframes_a_combinar = [df_grouped_list[2], df_grouped_list[3], df_grouped_list[4], df_grouped_list[5], df_grouped_list[0]]  # L3,L4,L5,L6,L1
-            df_final = df_grouped_list[1].copy() if not df_grouped_list[1].empty else pd.DataFrame()  # Empezar con L2
-            
-            # Columnas comunes para completar
-            columnas_comunes = ['U_Descripcion', 'U_Segmentacion_SK', 'U_Zone', 'U_Descrip_Color']
-            
-            # Proceso de combinación en cascada
-            for df_temp in dataframes_a_combinar:
-                if df_temp.empty:
-                    continue
-                    
-                # Merge con el DataFrame actual
-                df_merged = df_final.merge(
-                    df_temp,
-                    on='U_Estilo',
-                    how='left',
-                    suffixes=('', '_temp')
-                )
-                
-                # Completar valores faltantes en las columnas comunes
-                for col in columnas_comunes:
-                    if col in df_final.columns and f'{col}_temp' in df_merged.columns:
-                        df_merged[col] = df_merged[col].fillna(df_merged[f'{col}_temp'])
-                        df_merged.drop(f'{col}_temp', axis=1, inplace=True)
-                
-                # Añadir registros únicos del DataFrame temporal que no están en df_final
-                df_final = pd.concat([
-                    df_merged,
-                    df_temp[~df_temp['U_Estilo'].isin(df_final['U_Estilo'])]
-                ], ignore_index=True)
-            
-            # Eliminar posibles duplicados
-            df_final = df_final.drop_duplicates(subset='U_Estilo', keep='first')
+            # Convertir U_Estilo a string si existe
+            if 'U_Estilo' in df_final.columns:
+                df_final['U_Estilo'] = df_final['U_Estilo'].astype(str)
             
             # Guardar diccionario CH procesado
             self.ch_dict = df_final
             
-            st.success(f"✅ CH procesado: {len(df_final)} registros combinados desde L1-L6")
+            st.success(f"✅ CH cargado: {len(df_final)} registros desde MongoDB")
             
         except Exception as e:
-            st.error(f"❌ Error procesando archivos CH L1-L6: {str(e)}")
+            st.error(f"❌ Error cargando diccionario CH: {str(e)}")
             # Crear diccionario vacío como fallback
             self.ch_dict = pd.DataFrame()
     
@@ -2186,77 +1870,6 @@ def render_backup_tab():
     
     st.info("🚧 Sistema de backup deshabilitado en Streamlit Cloud")
     return
-    
-    # Sub-tabs para backup
-    sub_tab1, sub_tab2, sub_tab3 = st.tabs(["📋 Estado", "🔄 Crear", "📂 Restaurar"])
-    
-    with sub_tab1:
-        st.subheader("📊 Estado del Sistema de Backup")
-        
-        backups = backup_system.get_backup_list()
-        
-        # Métricas
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Backups Totales", len(backups))
-        with col2:
-            successful = len([b for b in backups if b['status'] == 'completed'])
-            st.metric("Backups Exitosos", successful)
-        with col3:
-            if backups:
-                last_backup = max(backups, key=lambda x: x['created_at'])
-                last_date = datetime.fromisoformat(last_backup['created_at'])
-                days_ago = (datetime.now() - last_date).days
-                st.metric("Último Backup", f"hace {days_ago} días")
-            else:
-                st.metric("Último Backup", "Nunca")
-        
-        # Lista de backups
-        st.subheader("🕒 Backups Recientes")
-        if backups:
-            df_backups = pd.DataFrame(backups[:5])
-            st.dataframe(df_backups[['backup_name', 'backup_type', 'created_at', 'status']])
-        else:
-            st.info("No hay backups disponibles")
-    
-    with sub_tab2:
-        st.subheader("🔄 Crear Nuevo Backup")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            backup_type = st.selectbox("Tipo de Backup", ["manual", "daily", "weekly", "monthly"])
-        with col2:
-            specific_bot = st.selectbox("Bot Específico", ["Todos"] + list(backup_system.bot_paths.keys()))
-        
-        if st.button("🚀 Crear Backup"):
-            with st.spinner("Creando backup..."):
-                bot_param = None if specific_bot == "Todos" else specific_bot
-                result = backup_system.create_backup(backup_type, bot_param)
-                
-                if result['status'] == 'completed':
-                    st.success(f"✅ Backup creado: {result['backup_name']}")
-                    st.info(f"📦 {result['files_backed_up']} archivos, {result['total_size']/(1024*1024):.1f} MB")
-                else:
-                    st.error(f"❌ Error: {result.get('error', 'Error desconocido')}")
-    
-    with sub_tab3:
-        st.subheader("📂 Restaurar Backup")
-        
-        available_backups = backup_system.get_backup_list()
-        if available_backups:
-            backup_options = [f"{b['backup_name']} ({b['created_at'][:16]})" for b in available_backups]
-            selected = st.selectbox("Seleccionar Backup", backup_options)
-            
-            if selected:
-                backup_index = backup_options.index(selected)
-                backup_info = available_backups[backup_index]
-                
-                st.json(backup_info)
-                
-                if st.button("🔄 Restaurar"):
-                    st.warning("⚠️ Función de restauración en desarrollo")
-        else:
-            st.info("No hay backups disponibles para restaurar")
 
 if __name__ == "__main__":
     main()
