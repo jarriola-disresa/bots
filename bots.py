@@ -2076,23 +2076,22 @@ def render_metrics_tab():
 # === SISTEMA DE BACKUP ===
 class BackupSystem:
     def __init__(self):
-        self.base_path = "/home/jarriola/BOTS"
-        self.backup_path = "/home/jarriola/BOTS/BACKUPS"
-        self.bot_paths = {
-            "ADOLFO": "/home/jarriola/BOTS/ADOLFO",
-            "BIRKEN": "/home/jarriola/BOTS/BIRKEN", 
-            "NEW ERA": "/home/jarriola/BOTS/NEW ERA",
-            "PB": "/home/jarriola/BOTS/PB",
-            "SKECHERS": "/home/jarriola/BOTS/SKECHERS",
-            "CH": "/home/jarriola/BOTS/CH"
-        }
+        # Disable backup system for Streamlit deployment
+        self.backup_enabled = False
+        self.backup_path = "./BACKUPS"
+        self.bot_paths = {}
         self.ensure_backup_structure()
     
     def ensure_backup_structure(self):
         """Crea estructura de carpetas de backup"""
-        Path(self.backup_path).mkdir(exist_ok=True)
-        for folder in ['daily', 'weekly', 'monthly', 'manual']:
-            Path(f"{self.backup_path}/{folder}").mkdir(exist_ok=True)
+        if not self.backup_enabled:
+            return
+        try:
+            Path(self.backup_path).mkdir(exist_ok=True)
+            for folder in ['daily', 'weekly', 'monthly', 'manual']:
+                Path(f"{self.backup_path}/{folder}").mkdir(exist_ok=True)
+        except:
+            self.backup_enabled = False
     
     def create_backup(self, backup_type="manual", specific_bot=None):
         """Crea backup completo o de bot específico"""
@@ -2185,7 +2184,8 @@ def render_backup_tab():
     """Renderiza la pestaña de backup"""
     st.markdown("### 💾 Sistema de Backup")
     
-    backup_system = BackupSystem()
+    st.info("🚧 Sistema de backup deshabilitado en Streamlit Cloud")
+    return
     
     # Sub-tabs para backup
     sub_tab1, sub_tab2, sub_tab3 = st.tabs(["📋 Estado", "🔄 Crear", "📂 Restaurar"])
