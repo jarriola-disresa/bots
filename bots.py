@@ -47,6 +47,13 @@ def check_password():
 if not check_password():
     st.stop()  # Do not continue if check_password is not True.
 
+# Clear cache button for debugging
+if st.button("🗑️ Clear Cache"):
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    st.success("Cache cleared! Please refresh the page.")
+    st.rerun()
+
 #################################################################
 # MongoDB Data Loading Functions
 @st.cache_resource
