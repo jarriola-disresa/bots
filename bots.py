@@ -80,16 +80,14 @@ def load_data(collection_name):
         
         df = df.drop(columns=['_id'], errors='ignore')
         
-        if 'Fecha' not in df.columns:
-            st.error("❌ No se encontró la columna 'Fecha' en los datos.")
-            st.stop()
+        # Process date column if it exists
+        if 'Fecha' in df.columns:
+            df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
+            df = df.dropna(subset=['Fecha'])
+            df = df[df['Fecha'] >= '2023-01-01']
         
-        df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
-        df = df.dropna(subset=['Fecha'])
-        
-        df = df[df['Fecha'] >= '2023-01-01']
-        
-        numeric_cols = ['Cantidad']
+        # Process numeric columns if they exist
+        numeric_cols = ['Cantidad', 'Precio', 'Venta', 'Ganancia']
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
