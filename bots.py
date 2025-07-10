@@ -107,11 +107,11 @@ def load_data(collection_name):
             df = df.dropna(subset=['Fecha'])
             df = df[df['Fecha'] >= '2023-01-01']
         
-        # Process numeric columns if they exist
+        # Process numeric columns if they exist (only convert to numeric, don't fill with 0)
         numeric_cols = ['Cantidad', 'Precio', 'Venta', 'Ganancia']
         for col in numeric_cols:
             if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                df[col] = pd.to_numeric(df[col], errors='coerce')
         
         return df
     except Exception as e:
