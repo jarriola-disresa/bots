@@ -69,6 +69,24 @@ def get_data(collection_name):
     
     return df
 
+def normalize_column_names(df):
+    """Normalize column names to handle case insensitive matching"""
+    column_mapping = {}
+    
+    for col in df.columns:
+        col_lower = col.lower()
+        if col_lower == 'itemname':
+            column_mapping[col] = 'ItemName'
+        elif col_lower == 'itemcode':
+            column_mapping[col] = 'ItemCode'
+        elif col_lower == 'empresa':
+            column_mapping[col] = 'Empresa'
+    
+    if column_mapping:
+        df = df.rename(columns=column_mapping)
+    
+    return df
+
 def load_data(collection_name):
     """Load and process data from MongoDB collection"""
     try:
@@ -79,6 +97,9 @@ def load_data(collection_name):
             st.stop()
         
         df = df.drop(columns=['_id'], errors='ignore')
+        
+        # Normalize column names for case insensitive matching
+        df = normalize_column_names(df)
         
         # Process date column if it exists
         if 'Fecha' in df.columns:
@@ -1325,6 +1346,9 @@ def process_data(bot_type, cleaner, uploaded_file):
         with st.spinner(f"🔄 Procesando datos de {bot_type}..."):
             # Cargar archivo
             df_null = pd.read_csv(uploaded_file, sep=';', low_memory=False)
+            
+            # Normalize column names for case insensitive matching
+            df_null = normalize_column_names(df_null)
             
             # Mostrar información de archivo cargado
             st.markdown("### 📂 Archivo Cargado")
