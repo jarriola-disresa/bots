@@ -1061,6 +1061,11 @@ class DataCleaner:
             'U_Division': 'U_Division_sk',
             'U_Temporalidad': 'U_Temporalidad_sk'
         }, inplace=True)
+        
+        # Convertir ItemCode al mismo tipo para el merge
+        df_valido['ItemCode'] = df_valido['ItemCode'].astype(str)
+        df_temp['ItemCode'] = df_temp['ItemCode'].astype(str)
+        
         df_valido = df_valido.merge(df_temp, on=['ItemCode', 'Empresa'], how='left')
         
         # Llenar columnas en df_valido solo si están vacías
@@ -1089,6 +1094,11 @@ class DataCleaner:
             'U_Temporalidad': 'U_Temporalidad_sk',
             'U_Descripcion': 'U_Descripcion_sk'
         }, inplace=True)
+        
+        # Convertir ItemCode al mismo tipo para el merge
+        df_invalido['ItemCode'] = df_invalido['ItemCode'].astype(str)
+        df_temp['ItemCode'] = df_temp['ItemCode'].astype(str)
+        
         df_invalido = df_invalido.merge(df_temp, on=['ItemCode', 'Empresa'], how='left')
         
         # Llenar columnas en df_invalido solo si están vacías
