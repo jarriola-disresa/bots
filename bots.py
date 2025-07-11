@@ -1019,6 +1019,11 @@ class DataCleaner:
             st.error("❌ Diccionario de SKECHERS no disponible")
             return df_null
         
+        # Convertir ItemCode al mismo tipo en ambos DataFrames para evitar errores de merge
+        df_null['ItemCode'] = df_null['ItemCode'].astype(str)
+        self.skechers_dict = self.skechers_dict.copy()
+        self.skechers_dict['ItemCode'] = self.skechers_dict['ItemCode'].astype(str)
+        
         # Extraer U_Estilo de ItemName (lo que está antes del primer '/')
         df_null['U_Estilo'] = df_null['ItemName'].str.split('/').str[0]
         
@@ -1062,10 +1067,6 @@ class DataCleaner:
             'U_Temporalidad': 'U_Temporalidad_sk'
         }, inplace=True)
         
-        # Convertir ItemCode al mismo tipo para el merge
-        df_valido['ItemCode'] = df_valido['ItemCode'].astype(str)
-        df_temp['ItemCode'] = df_temp['ItemCode'].astype(str)
-        
         df_valido = df_valido.merge(df_temp, on=['ItemCode', 'Empresa'], how='left')
         
         # Llenar columnas en df_valido solo si están vacías
@@ -1094,10 +1095,6 @@ class DataCleaner:
             'U_Temporalidad': 'U_Temporalidad_sk',
             'U_Descripcion': 'U_Descripcion_sk'
         }, inplace=True)
-        
-        # Convertir ItemCode al mismo tipo para el merge
-        df_invalido['ItemCode'] = df_invalido['ItemCode'].astype(str)
-        df_temp['ItemCode'] = df_temp['ItemCode'].astype(str)
         
         df_invalido = df_invalido.merge(df_temp, on=['ItemCode', 'Empresa'], how='left')
         
