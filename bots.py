@@ -81,6 +81,27 @@ def normalize_column_names(df):
             column_mapping[col] = 'ItemCode'
         elif col_lower == 'empresa':
             column_mapping[col] = 'Empresa'
+        # NEW ERA specific columns
+        elif col_lower == 'u_estilo':
+            column_mapping[col] = 'U_Estilo'
+        elif col_lower == 'u_silueta':
+            column_mapping[col] = 'U_Silueta'
+        elif col_lower == 'u_team':
+            column_mapping[col] = 'U_Team'
+        elif col_lower == 'u_descrip_color':
+            column_mapping[col] = 'U_Descrip_Color'
+        elif col_lower == 'u_segmento':
+            column_mapping[col] = 'U_Segmento'
+        elif col_lower == 'u_liga':
+            column_mapping[col] = 'U_Liga'
+        elif col_lower == 'u_coleccion_ne':
+            column_mapping[col] = 'U_Coleccion_NE'
+        elif col_lower == 'u_genero':
+            column_mapping[col] = 'U_Genero'
+        elif col_lower == 'u_descripcion':
+            column_mapping[col] = 'U_Descripcion'
+        elif col_lower == 'u_temporalidad':
+            column_mapping[col] = 'U_Temporalidad'
     
     if column_mapping:
         df = df.rename(columns=column_mapping)
@@ -156,7 +177,7 @@ class DataCleaner:
         self.new_era_dict = None
         self.ch_dict = None
         
-        # Diccionario de licencias para NEW ERA
+        # Diccionario de licencias para NEW ERA - COMPLETO del notebook original
         self.team_licenses = {
             'LOS ANGELES DODGERS': 'MLB',
             'NEW YORK YANKEES': 'MLB',
@@ -268,6 +289,7 @@ class DataCleaner:
             'HOUSTON ROCKETS': 'NBA',
             'LED ZEPPELIN': 'ENTERTAINMENT',
             'GUATEMALA': 'MARCA PAIS',
+            'NONE': 'NEW ERA BRANDED',
             'LEHIGH VALLEY IRON PIGS': 'MILB',
             'FRESNO GRIZZLIES': 'MILB',
             'NFL GENERIC LOGO': 'NFL',
@@ -400,6 +422,25 @@ class DataCleaner:
             'CORPUS CRISTI HOOKS': 'MILB',
             'ENTREGAS A PERSONAL': 'NO APLICA'
         }
+        
+        # Diccionario de licencias adicionales para casos especiales (del notebook original)
+        self.team_licenses_extended = {
+            'NO APLICA': 'NBA',  # Segunda entrada para NO APLICA
+            'NONE': 'NONE LICENSED',  # Segunda entrada para NONE
+            'NEW ERA BRANDED': 'MLB',  # Segunda entrada para NEW ERA BRANDED
+            'PUERTO RICO': 'MARCA PAIS',  # Segunda entrada para PUERTO RICO
+            'NONE': 'NON LICENSED',  # Tercera entrada para NONE
+            'WB HARRY POTTER DEATHLY HOLLOW PT 2': 'WARNER BROS',  # Entrada alternativa
+            'CANGREJEROS DE SANTU': 'LIGA DE BEISBOL PROFESIONAL ROBERTO CLEMENTE',  # Entrada alternativa
+            'BUGS BUNNY': 'WARNER BROS',  # Entrada alternativa
+            'WILE E COYOTE': 'WARNER BROS',  # Entrada alternativa
+            'BEAVIS AND BUTT-HEAD': 'NEW ERA BRANDED',  # Entrada alternativa
+            'OAKLAND ATHLETICS': 'MARCA PAIS',  # Entrada alternativa
+            'ELMER FUDD': 'WARNER BROS',  # Entrada alternativa
+            'NFL OILERS': 'MARCA PAIS',  # Entrada alternativa
+            'CHICAGO BEARS': 'MARCA PAIS',  # Entrada alternativa
+            'UNKNOWN': 'ENTERTAINMENT'  # Entrada alternativa
+        }
     
     @st.cache_data
     def load_adolfo_dict(_self):
@@ -518,20 +559,106 @@ class DataCleaner:
             self.ch_dict = pd.DataFrame()
     
     def process_new_era_levels(self):
-        """Carga diccionario NEW ERA desde MongoDB"""
+        """Procesa diccionario NEW ERA desde archivos CSV L1-L7 (lógica del notebook original)"""
         try:
-            # Cargar datos desde MongoDB
-            df_final = load_data("NEW_ERA")
+            # Primero intentar cargar desde MongoDB
+            try:
+                df_final = load_data("NEW_ERA")
+                if not df_final.empty and 'U_Estilo' in df_final.columns:
+                    df_final['U_Estilo'] = df_final['U_Estilo'].astype(str)
+                    st.success("✅ Diccionario NEW ERA cargado desde MongoDB")
+                    return df_final
+            except:
+                pass
             
-            # Convertir U_Estilo a string si existe
-            if 'U_Estilo' in df_final.columns:
-                df_final['U_Estilo'] = df_final['U_Estilo'].astype(str)
+            # Si MongoDB no funciona, cargar desde archivos CSV locales
+            import os
+            base_path = "/home/jarriola/mis-repos/bots/NEW ERA"
+            
+            # Verificar si existen los archivos CSV
+            csv_files = [f"{base_path}/NE_L{i}.csv" for i in range(1, 8)]
+            if not all(os.path.exists(f) for f in csv_files):
+                st.error("❌ No se encontraron archivos CSV L1-L7 en la carpeta NEW ERA")
+                return pd.DataFrame()
+            
+            # Cargar archivos L1-L7 (replicando lógica del notebook)
+            dataframes = []
+            for i in range(1, 8):
+                file_path = f"{base_path}/NE_L{i}.csv"
+                try:
+                    df = pd.read_csv(file_path, delimiter=';', low_memory=False)
+                    # Normalizar nombres de columnas para case-insensitive matching
+                    df = normalize_column_names(df)
+                    dataframes.append(df)
+                except Exception as e:
+                    continue
+            
+            if not dataframes:
+                return pd.DataFrame()
+            
+            # Columnas necesarias para el groupby
+            columnas_groupby = ['U_Estilo', 'U_Silueta', 'U_Team', 'U_Descrip_Color', 'U_Segmento',
+                               'U_Liga', 'U_Coleccion_NE', 'U_Genero', 'U_Descripcion', 'U_Temporalidad']
+            
+            # Procesar cada DataFrame con groupby (replicando notebook)
+            grouped_dataframes = []
+            for i, df in enumerate(dataframes, 1):
+                try:
+                    # Verificar que tenga las columnas necesarias
+                    columnas_disponibles = [col for col in columnas_groupby if col in df.columns]
+                    if not columnas_disponibles:
+                        continue
+                    
+                    # Groupby y drop count
+                    df_grouped = df.groupby(columnas_disponibles).size().reset_index(name='count')
+                    df_grouped = df_grouped.drop(columns=['count'])
+                    df_grouped['U_Estilo'] = df_grouped['U_Estilo'].astype(str)
+                    grouped_dataframes.append(df_grouped)
+                except Exception as e:
+                    continue
+            
+            if not grouped_dataframes:
+                return pd.DataFrame()
+            
+            # Combinación en cascada (replicando notebook)
+            df_final = grouped_dataframes[0].copy()  # Empezar con L1
+            
+            columnas_comunes = ['U_Silueta', 'U_Team', 'U_Descrip_Color', 'U_Segmento',
+                               'U_Liga', 'U_Coleccion_NE', 'U_Genero', 'U_Descripcion', 'U_Temporalidad']
+            
+            # Combinar L2-L7 en cascada
+            for i, df_temp in enumerate(grouped_dataframes[1:], 2):
+                try:
+                    # Merge con el DataFrame actual
+                    df_merged = df_final.merge(
+                        df_temp,
+                        on='U_Estilo',
+                        how='left',
+                        suffixes=('', '_temp')
+                    )
+                    
+                    # Completar valores faltantes
+                    for col in columnas_comunes:
+                        if col in df_final.columns and f'{col}_temp' in df_merged.columns:
+                            df_merged[col] = df_merged[col].fillna(df_merged[f'{col}_temp'])
+                            df_merged.drop(f'{col}_temp', axis=1, inplace=True)
+                    
+                    # Añadir registros únicos
+                    df_final = pd.concat([
+                        df_merged,
+                        df_temp[~df_temp['U_Estilo'].isin(df_final['U_Estilo'])]
+                    ], ignore_index=True)
+                    
+                except Exception as e:
+                    continue
+            
+            # Eliminar duplicados finales
+            df_final = df_final.drop_duplicates(subset='U_Estilo', keep='first')
             
             return df_final
             
         except Exception as e:
-            st.error(f"❌ Error cargando diccionario NEW ERA: {str(e)}")
-            # Crear diccionario vacío como fallback
+            st.error(f"❌ Error procesando diccionario NEW ERA: {str(e)}")
             return pd.DataFrame()
     
     def process_ch_levels(self):
@@ -717,9 +844,11 @@ class DataCleaner:
     
     def clean_new_era_data(self, df_null: pd.DataFrame) -> pd.DataFrame:
         """Limpia datos de NEW ERA usando diccionario combinado L1-L7"""
-        if self.new_era_dict.empty:
+        new_era_dict = self.get_new_era_dict()
+        if new_era_dict.empty:
             st.error("❌ Diccionario de NEW ERA no disponible")
             return df_null
+        
         
         # Extraer componentes del ItemName según lógica del notebook
         df_null['U_Estilo'] = df_null['ItemName'].str.split('/').str[0]
@@ -741,7 +870,18 @@ class DataCleaner:
         columnas_extra = ['ItemCode', 'Empresa', 'ItemName', 'U_Talla']
         
         # Asegurar que se trabaja con las columnas correctas
-        df_reference = self.new_era_dict[columnas_completar] if not self.new_era_dict.empty else pd.DataFrame()
+        if new_era_dict.empty:
+            st.error("❌ Diccionario NEW ERA vacío - no se pueden completar las columnas")
+            return df_null
+        
+        # Verificar que el diccionario tenga las columnas necesarias
+        columnas_disponibles = [col for col in columnas_completar if col in new_era_dict.columns]
+        if not columnas_disponibles:
+            st.error("❌ Diccionario NEW ERA no tiene las columnas necesarias para completar")
+            return df_null
+        
+        # Usar solo columnas disponibles en el diccionario
+        df_reference = new_era_dict[columnas_disponibles].copy()
         
         # Mantener solo columnas existentes en df_null
         columnas_existentes = [col for col in columnas_completar + columnas_extra if col in df_null.columns]
@@ -749,34 +889,35 @@ class DataCleaner:
         
         # Convertir U_Estilo al mismo tipo de dato
         df_null['U_Estilo'] = df_null['U_Estilo'].astype(str)
-        if not df_reference.empty:
-            df_reference['U_Estilo'] = df_reference['U_Estilo'].astype(str)
+        df_reference['U_Estilo'] = df_reference['U_Estilo'].astype(str)
         
         # Crear diccionario de referencia sin duplicados por U_Estilo
-        if not df_reference.empty:
-            df_reference_clean = df_reference.drop_duplicates('U_Estilo')
-            
-            # Versión optimizada con merge
-            temp_df = df_null[columnas_extra + ['U_Estilo']].merge(
-                df_reference_clean, 
-                on='U_Estilo', 
-                how='left',
-                suffixes=('', '_ref')
-            )
-            
-            # Completar valores nulos (empezar desde 1 para omitir U_Estilo)
-            for col in columnas_completar[1:]:
-                if col in temp_df.columns and col in df_null.columns:
-                    mask = df_null[col].isnull()
-                    df_null.loc[mask, col] = temp_df.loc[mask, col]
+        df_reference_clean = df_reference.drop_duplicates('U_Estilo')
         
-        # Aplicar validación de licencias de equipos
+        # Versión optimizada con merge
+        temp_df = df_null[columnas_extra + ['U_Estilo']].merge(
+            df_reference_clean, 
+            on='U_Estilo', 
+            how='left',
+            suffixes=('', '_ref')
+        )
+        
+        # Completar valores nulos (empezar desde 1 para omitir U_Estilo)
+        for col in columnas_completar[1:]:
+            if col in temp_df.columns and col in df_null.columns:
+                mask = df_null[col].isnull()
+                df_null.loc[mask, col] = temp_df.loc[mask, col]
+        
+        # Aplicar validación de licencias de equipos - MEJORADO del notebook original
         if 'U_Liga' in df_null.columns and 'U_Team' in df_null.columns:
             registros_en_blanco = df_null[df_null['U_Liga'].isna() | (df_null['U_Liga'] == '')]
             for index, row in registros_en_blanco.iterrows():
                 equipo = row['U_Team'] if pd.notna(row['U_Team']) else ''
                 if equipo in self.team_licenses:
                     df_null.at[index, 'U_Liga'] = self.team_licenses[equipo]
+                # Verificar también en el diccionario extendido para casos especiales
+                elif equipo in self.team_licenses_extended:
+                    df_null.at[index, 'U_Liga'] = self.team_licenses_extended[equipo]
         
         return df_null
     
