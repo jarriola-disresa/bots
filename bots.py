@@ -455,7 +455,7 @@ class DataCleaner:
     def load_birken_dict(_self):
         """Carga diccionario BIRKEN con cache"""
         try:
-            return load_data("BIRKEN")
+            return pd.read_csv("diccionario_birken.csv", sep=";")
         except Exception as e:
             st.error(f"❌ Error cargando diccionario BIRKEN: {str(e)}")
             return pd.DataFrame()
@@ -794,15 +794,16 @@ class DataCleaner:
         df_valido['u_descripcion'] = df_valido['ItemName'].str.split('/').str[1]
         df_valido['u_descrip_color'] = df_valido['ItemName'].str.split('/').str[3]
         
-        # Merge para válidos
-        bk_temp = self.birken_dict[['ItemCode', 'u_coleccion', 'u_genero', 'u_division']].rename(
+        # Merge para válidos usando U_Estilo como clave
+        bk_temp = self.birken_dict[['U_Estilo', 'U_Coleccion', 'U_Genero', 'U_Division']].rename(
             columns={
-                'u_coleccion': 'u_coleccion_bk',
-                'u_genero': 'u_genero_bk',
-                'u_division': 'u_division_bk'
+                'U_Estilo': 'u_estilo',
+                'U_Coleccion': 'u_coleccion_bk',
+                'U_Genero': 'u_genero_bk',
+                'U_Division': 'u_division_bk'
             }
         )
-        df_valido = df_valido.merge(bk_temp, on='ItemCode', how='left')
+        df_valido = df_valido.merge(bk_temp, on='u_estilo', how='left')
         
         # Llenar columnas en df_valido solo si están vacías
         for col in ['u_genero', 'u_coleccion', 'u_division']:
@@ -814,21 +815,21 @@ class DataCleaner:
                 df_valido[col] = df_valido[f'{col}_bk'].combine_first(df_valido[col])
                 df_valido.drop(columns=[f'{col}_bk'], inplace=True)
         
-        # Para INVÁLIDOS: merge con todas las columnas
-        bk_temp = self.birken_dict[['ItemCode', 'u_coleccion', 'u_genero', 'u_division', 'u_estilo', 'u_descripcion', 'u_descrip_color']].rename(
+        # Para INVÁLIDOS: merge con todas las columnas usando U_Estilo como clave
+        bk_temp = self.birken_dict[['U_Estilo', 'U_Coleccion', 'U_Genero', 'U_Division', 'U_Descripcion', 'U_Descrip_Color']].rename(
             columns={
-                'u_coleccion': 'u_coleccion_bk',
-                'u_genero': 'u_genero_bk',
-                'u_division': 'u_division_bk',
-                'u_estilo': 'u_estilo_bk',
-                'u_descripcion': 'u_descripcion_bk',
-                'u_descrip_color': 'u_descrip_color_bk'
+                'U_Estilo': 'u_estilo',
+                'U_Coleccion': 'u_coleccion_bk',
+                'U_Genero': 'u_genero_bk',
+                'U_Division': 'u_division_bk',
+                'U_Descripcion': 'u_descripcion_bk',
+                'U_Descrip_Color': 'u_descrip_color_bk'
             }
         )
-        df_invalido = df_invalido.merge(bk_temp, on='ItemCode', how='left')
+        df_invalido = df_invalido.merge(bk_temp, on='u_estilo', how='left')
         
         # Llenar columnas en df_invalido solo si están vacías
-        for col in ['u_genero', 'u_coleccion', 'u_division', 'u_estilo', 'u_descripcion', 'u_descrip_color']:
+        for col in ['u_genero', 'u_coleccion', 'u_division', 'u_descripcion', 'u_descrip_color']:
             # Crear columna si no existe
             if col not in df_invalido.columns:
                 df_invalido[col] = np.nan
