@@ -69,6 +69,14 @@ def get_data(collection_name):
     
     return df
 
+def get_column_case_insensitive(df, column_name):
+    """Get column from DataFrame case-insensitively"""
+    column_name_lower = column_name.lower()
+    for col in df.columns:
+        if col.lower() == column_name_lower:
+            return col
+    return None
+
 def normalize_column_names(df):
     """Normalize column names to handle case insensitive matching"""
     column_mapping = {}
@@ -81,7 +89,7 @@ def normalize_column_names(df):
             column_mapping[col] = 'ItemCode'
         elif col_lower == 'empresa':
             column_mapping[col] = 'Empresa'
-        # NEW ERA specific columns
+        # Columns that are used by specific bots - keep uppercase for compatibility
         elif col_lower == 'u_estilo':
             column_mapping[col] = 'U_Estilo'
         elif col_lower == 'u_silueta':
@@ -102,11 +110,45 @@ def normalize_column_names(df):
             column_mapping[col] = 'U_Descripcion'
         elif col_lower == 'u_temporalidad':
             column_mapping[col] = 'U_Temporalidad'
+        # Additional common columns for all bots - lowercase for ADOLFO/PB compatibility
+        elif col_lower == 'u_categoria':
+            column_mapping[col] = 'u_categoria'
+        elif col_lower == 'u_familia':
+            column_mapping[col] = 'u_familia'
+        elif col_lower == 'u_prenda':
+            column_mapping[col] = 'u_prenda'
+        elif col_lower == 'u_subprenda':
+            column_mapping[col] = 'u_subprenda'
+        elif col_lower == 'u_coleccion':
+            column_mapping[col] = 'u_coleccion'
+        elif col_lower == 'u_division':
+            column_mapping[col] = 'u_division'
+        # Additional uppercase columns for compatibility
+        elif col_lower == 'u_suela':
+            column_mapping[col] = 'U_Suela'
+        elif col_lower == 'u_segmentacion_sk':
+            column_mapping[col] = 'U_Segmentacion_SK'
+        elif col_lower == 'u_zone':
+            column_mapping[col] = 'U_Zone'
+        elif col_lower == 'u_talla':
+            column_mapping[col] = 'U_Talla'
     
     if column_mapping:
         df = df.rename(columns=column_mapping)
     
     return df
+
+def get_columns_case_insensitive(df, columns):
+    """Get list of columns from DataFrame case-insensitively"""
+    result_columns = []
+    for col_name in columns:
+        actual_col = get_column_case_insensitive(df, col_name)
+        if actual_col is not None:
+            result_columns.append(actual_col)
+        else:
+            # If column doesn't exist, keep original name for error handling
+            result_columns.append(col_name)
+    return result_columns
 
 def load_data(collection_name):
     """Load and process data from MongoDB collection"""
@@ -715,13 +757,14 @@ class DataCleaner:
         df_valido['u_descrip_color'] = df_valido['ItemName'].str.split('/').str[3]
         
         # Merge para válidos
-        ad_temp = adolfo_dict[['ItemCode', 'u_categoria', 'u_genero', 'u_familia']].rename(
-            columns={
-                'u_categoria': 'u_categoria_ad',
-                'u_genero': 'u_genero_ad',
-                'u_familia': 'u_familia_ad'
-            }
-        )
+        ad_columns = get_columns_case_insensitive(adolfo_dict, ['ItemCode', 'u_categoria', 'u_genero', 'u_familia'])
+        ad_rename_dict = {}
+        for orig_col, target_col in zip(['ItemCode', 'u_categoria', 'u_genero', 'u_familia'], 
+                                       ['ItemCode', 'u_categoria_ad', 'u_genero_ad', 'u_familia_ad']):
+            actual_col = get_column_case_insensitive(adolfo_dict, orig_col)
+            if actual_col and actual_col != target_col:
+                ad_rename_dict[actual_col] = target_col
+        ad_temp = adolfo_dict[ad_columns].rename(columns=ad_rename_dict)
         df_valido = df_valido.merge(ad_temp, on='ItemCode', how='left')
         
         # Llenar columnas en df_valido solo si están vacías
@@ -735,15 +778,14 @@ class DataCleaner:
                 df_valido.drop(columns=[f'{col}_ad'], inplace=True)
         
         # Para INVÁLIDOS: merge con todas las columnas
-        ad_temp = adolfo_dict[['ItemCode', 'u_categoria', 'u_genero', 'u_familia', 'u_estilo', 'u_descrip_color']].rename(
-            columns={
-                'u_categoria': 'u_categoria_ad',
-                'u_genero': 'u_genero_ad',
-                'u_familia': 'u_familia_ad',
-                'u_estilo': 'u_estilo_ad',
-                'u_descrip_color': 'u_descrip_color_ad'
-            }
-        )
+        ad_columns_full = get_columns_case_insensitive(adolfo_dict, ['ItemCode', 'u_categoria', 'u_genero', 'u_familia', 'u_estilo', 'u_descrip_color'])
+        ad_rename_dict_full = {}
+        for orig_col, target_col in zip(['ItemCode', 'u_categoria', 'u_genero', 'u_familia', 'u_estilo', 'u_descrip_color'], 
+                                       ['ItemCode', 'u_categoria_ad', 'u_genero_ad', 'u_familia_ad', 'u_estilo_ad', 'u_descrip_color_ad']):
+            actual_col = get_column_case_insensitive(adolfo_dict, orig_col)
+            if actual_col and actual_col != target_col:
+                ad_rename_dict_full[actual_col] = target_col
+        ad_temp = adolfo_dict[ad_columns_full].rename(columns=ad_rename_dict_full)
         df_invalido = df_invalido.merge(ad_temp, on='ItemCode', how='left')
         
         # Llenar columnas en df_invalido solo si están vacías
@@ -961,14 +1003,14 @@ class DataCleaner:
         df_validos['u_descrip_color'] = df_validos['ItemName'].str.split('/').str[3]
         
         # Merge para válidos
-        df_dict_temp = self.pb_dict[['ItemCode', 'Empresa', 'u_genero', 'u_prenda', 'u_subprenda', 'u_temporalidad']].rename(
-            columns={
-                'u_genero': 'u_genero_dict',
-                'u_prenda': 'u_prenda_dict',
-                'u_subprenda': 'u_subprenda_dict',
-                'u_temporalidad': 'u_temporalidad_dict'
-            }
-        )
+        pb_columns = get_columns_case_insensitive(self.pb_dict, ['ItemCode', 'Empresa', 'u_genero', 'u_prenda', 'u_subprenda', 'u_temporalidad'])
+        rename_dict = {}
+        for orig_col, target_col in zip(['ItemCode', 'Empresa', 'u_genero', 'u_prenda', 'u_subprenda', 'u_temporalidad'], 
+                                       ['ItemCode', 'Empresa', 'u_genero_dict', 'u_prenda_dict', 'u_subprenda_dict', 'u_temporalidad_dict']):
+            actual_col = get_column_case_insensitive(self.pb_dict, orig_col)
+            if actual_col and actual_col != target_col:
+                rename_dict[actual_col] = target_col
+        df_dict_temp = self.pb_dict[pb_columns].rename(columns=rename_dict)
         df_validos = df_validos.merge(df_dict_temp, on=['ItemCode', 'Empresa'], how='left')
         
         # Llenar columnas en df_validos solo si están vacías
@@ -985,17 +1027,14 @@ class DataCleaner:
         # Para INVÁLIDOS: limpiar u_estilo y hacer merge completo
         df_invalidos['u_estilo'] = np.nan
         
-        df_dict_temp = self.pb_dict[['ItemCode', 'Empresa', 'u_genero', 'u_prenda', 'u_subprenda', 'u_temporalidad', 'u_estilo', 'u_descripcion', 'u_descrip_color']].rename(
-            columns={
-                'u_genero': 'u_genero_dict',
-                'u_prenda': 'u_prenda_dict',
-                'u_subprenda': 'u_subprenda_dict',
-                'u_temporalidad': 'u_temporalidad_dict',
-                'u_estilo': 'u_estilo_dict',
-                'u_descripcion': 'u_descripcion_dict',
-                'u_descrip_color': 'u_descrip_color_dict'
-            }
-        )
+        pb_columns_full = get_columns_case_insensitive(self.pb_dict, ['ItemCode', 'Empresa', 'u_genero', 'u_prenda', 'u_subprenda', 'u_temporalidad', 'u_estilo', 'u_descripcion', 'u_descrip_color'])
+        rename_dict_full = {}
+        for orig_col, target_col in zip(['ItemCode', 'Empresa', 'u_genero', 'u_prenda', 'u_subprenda', 'u_temporalidad', 'u_estilo', 'u_descripcion', 'u_descrip_color'], 
+                                       ['ItemCode', 'Empresa', 'u_genero_dict', 'u_prenda_dict', 'u_subprenda_dict', 'u_temporalidad_dict', 'u_estilo_dict', 'u_descripcion_dict', 'u_descrip_color_dict']):
+            actual_col = get_column_case_insensitive(self.pb_dict, orig_col)
+            if actual_col and actual_col != target_col:
+                rename_dict_full[actual_col] = target_col
+        df_dict_temp = self.pb_dict[pb_columns_full].rename(columns=rename_dict_full)
         df_invalidos = df_invalidos.merge(df_dict_temp, on=['ItemCode', 'Empresa'], how='left')
         
         # Llenar columnas en df_invalidos solo si están vacías
